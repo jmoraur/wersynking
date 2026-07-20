@@ -69,6 +69,7 @@ Item {
         deviceForm.initialLabel = ""
         deviceForm.initialUuid = ""
         deviceForm.initialNetworkTarget = ""
+        deviceForm.initialRsh = ""
         deviceForm.open()
     }
 
@@ -95,6 +96,7 @@ Item {
             deviceForm.initialLabel = row.label || ""
             deviceForm.initialUuid = row.uuid || ""
             deviceForm.initialNetworkTarget = row.network_target || ""
+            deviceForm.initialRsh = row.rsh || ""
             deviceForm.open()
         } else if (rowType === "connection") {
             connectionForm.bindingId = nodeId

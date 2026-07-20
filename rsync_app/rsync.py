@@ -83,14 +83,26 @@ def build_rsync_argv(
         if _effective(binding_row, runtime_overrides, opt["key"]):
             argv.append(opt["flag"])
 
-    if _effective(binding_row, runtime_overrides, "chown_mode") == "dest":
+    chown_mode = _effective(binding_row, runtime_overrides, "chown_mode")
+    if chown_mode == "dest":
+        # "Like in destination": files end up as if created fresh on the
+        # receiving side — owned by the receiving account, default perms,
+        # executables kept runnable. The man page's own recipe (--perms).
+        # Stored chown/chmod values are ignored in this mode.
+        argv += ["--no-owner", "--no-group", "--no-perms", "--chmod=ugo=rwX"]
+    elif chown_mode == "custom":
+        # Force exact values. --chown's mapping replaces source ownership,
+        # so owner/group/perms must stay ON — adding --no-owner/--no-group
+        # here would cancel the --chown, and --no-perms would mask --chmod
+        # through the receiver's umask. (Forcing a *different* owner still
+        # needs a root receiving side; rsync silently keeps the receiving
+        # account otherwise.)
         chown_value = _effective(binding_row, runtime_overrides, "chown_value")
         chmod_value = _effective(binding_row, runtime_overrides, "chmod_value")
         if chown_value:
             argv.append(f"--chown={chown_value}")
         if chmod_value:
             argv.append(f"--chmod={chmod_value}")
-        argv += ["--no-perms", "--no-owner", "--no-group"]
 
     excludes = _effective(binding_row, runtime_overrides, "excludes")
     if excludes:
@@ -99,7 +111,9 @@ def build_rsync_argv(
             if pattern:
                 argv.append(f"--exclude={pattern}")
 
-    rsh = _effective(binding_row, runtime_overrides, "rsh")
+    # rsh describes how to reach the *device*, so it rides on the dest
+    # context, not the binding — there is deliberately no per-run override.
+    rsh = dest.get("rsh")
     if rsh:
         argv.append(f"--rsh={rsh}")
 

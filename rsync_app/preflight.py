@@ -16,7 +16,7 @@ import os
 def check_binding(row: dict, source: dict, dest: dict) -> list[dict]:
     """Inspect a binding draft + its resolved sides and return issues.
 
-    `row` is the binding dict (path_mode, chown_*, opt_*, excludes, rsh,
+    `row` is the binding dict (path_mode, chown_*, opt_*, excludes,
     dest_subpath). `source` is `{"path": <abs source path>}`. `dest` is
     `{"kind": "local"|"remote", "base": <mountpoint|network_target>,
     "subpath": <dest_subpath>, "available": <bool>}`.
@@ -39,18 +39,18 @@ def _warn(code: str, message: str) -> dict:
 def _check_source(source: dict, issues: list[dict]) -> None:
     path = (source or {}).get("path") or ""
     if not path:
-        issues.append(_err("E_SRC_MISSING", "Source path is not set."))
+        issues.append(_err("E_SRC_MISSING", "The source folder is not set."))
         return
     if not os.path.isdir(path):
         issues.append(_err(
             "E_SRC_MISSING",
-            f"Source path does not exist: {path}",
+            f"The source folder can't be found: {path}",
         ))
         return
     if not os.access(path, os.R_OK):
         issues.append(_err(
             "E_SRC_UNREADABLE",
-            f"Source path is not readable: {path}",
+            f"The app isn't allowed to read the source folder: {path}",
         ))
 
 
@@ -61,7 +61,7 @@ def _check_dest(dest: dict, issues: list[dict]) -> None:
         if not available:
             issues.append(_err(
                 "E_DEST_NOT_MOUNTED",
-                "Destination device is not mounted.",
+                "The destination drive is not connected.",
             ))
             return
         resolved = _resolved_dest_path(dest)
@@ -69,20 +69,20 @@ def _check_dest(dest: dict, issues: list[dict]) -> None:
         if ancestor is None:
             issues.append(_err(
                 "E_DEST_PARENT_UNWRITABLE",
-                f"No existing parent directory for destination: {resolved}",
+                f"There's no folder to create the destination in: {resolved}",
             ))
             return
         if not os.access(ancestor, os.W_OK):
             issues.append(_err(
                 "E_DEST_PARENT_UNWRITABLE",
-                f"Destination directory is not writable: {ancestor}",
+                f"The destination folder can't be written to: {ancestor}",
             ))
         return
     if kind == "remote":
         if not available:
             issues.append(_err(
                 "E_REMOTE_UNREACHABLE",
-                "Remote host did not respond on the SSH port.",
+                "The server did not respond. Check that it's online.",
             ))
 
 
@@ -91,16 +91,16 @@ def _check_warnings(row: dict, source: dict, dest: dict,
     if row.get("opt_delete"):
         issues.append(_warn(
             "W_DELETE_ENABLED",
-            "--delete is enabled. Files on the destination that are not on"
-            " the source will be removed.",
+            "Files that exist only on the destination will be deleted"
+            " (--delete is on).",
         ))
 
     path_mode = row.get("path_mode") or "contents"
     if path_mode == "folder":
         issues.append(_warn(
             "W_PATH_MODE_FOLDER",
-            "Path mode is 'folder' — the source directory will be nested"
-            " inside the destination (no trailing slash).",
+            "The source folder itself will be placed inside the"
+            " destination, not just its contents.",
         ))
 
     src_path = (source or {}).get("path") or ""
@@ -116,20 +116,22 @@ def _check_warnings(row: dict, source: dict, dest: dict,
         if src_leaf and dest_leaf and src_leaf.lower() != dest_leaf.lower():
             issues.append(_warn(
                 "W_BASENAME_MISMATCH",
-                f"Source folder '{src_leaf}' differs from destination"
-                f" folder '{dest_leaf}'. Confirm this is intentional.",
+                f"The source folder is called '{src_leaf}' but the"
+                f" destination folder is called '{dest_leaf}' —"
+                " double-check this is the right place.",
             ))
 
-    if row.get("chown_mode") == "dest":
+    if row.get("chown_mode") == "custom":
         if not (row.get("chown_value") or "").strip():
             issues.append(_warn(
                 "W_DEST_CHOWN_EMPTY",
-                "Ownership mode is 'force dest values' but --chown is empty.",
+                "Custom ownership is selected, but no owner is filled in.",
             ))
         if not (row.get("chmod_value") or "").strip():
             issues.append(_warn(
                 "W_DEST_CHMOD_EMPTY",
-                "Ownership mode is 'force dest values' but --chmod is empty.",
+                "Custom ownership is selected, but no permissions are"
+                " filled in.",
             ))
 
     excludes = row.get("excludes") or ""
@@ -139,15 +141,16 @@ def _check_warnings(row: dict, source: dict, dest: dict,
         if "\r" in raw:
             issues.append(_warn(
                 "W_EXCLUDES_CRLF",
-                f"Excludes line {idx} contains a carriage return — rsync"
-                " will treat it as part of the pattern.",
+                f"Line {idx} of the skip list contains a hidden"
+                " line-ending character and won't match anything —"
+                " re-type it.",
             ))
             continue
         if raw[0].isspace():
             issues.append(_warn(
                 "W_EXCLUDES_WHITESPACE",
-                f"Excludes line {idx} starts with whitespace — rsync"
-                " treats leading spaces as part of the pattern.",
+                f"Line {idx} of the skip list starts with a space, which"
+                " becomes part of the name to skip.",
             ))
 
 

@@ -73,17 +73,15 @@ Dialog {
             const d = {
                 source_label_id: 0, dest_device_id: 0, dest_subpath: "",
                 path_mode: "contents", chown_mode: "source",
-                chown_value: "", chmod_value: "", excludes: "", rsh: "",
+                chown_value: "", chmod_value: "", excludes: "",
             }
             for (const o of _catalog) d[o.key] = o.default ? 1 : 0
             for (const k in d) {
                 if (b[k] !== undefined && b[k] !== null) d[k] = b[k]
             }
             draft = d
-            chownField.text = d.chown_value || ""
-            chmodField.text = d.chmod_value || ""
             excludesArea.text = d.excludes || ""
-            rshField.text = d.rsh || ""
+            ownershipEditor.load()
         }
     }
 
@@ -320,7 +318,7 @@ Dialog {
                     }
                 }
 
-                // Path & ownership — per-run overrides.
+                // Path mode + ownership — per-run overrides.
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: Theme.s2
@@ -334,39 +332,14 @@ Dialog {
                         value: dlg.draft.path_mode || "contents"
                         onActivated: v => dlg.set("path_mode", v)
                     }
-                    Label { text: "Ownership"; opacity: 0.75; Layout.leftMargin: Theme.s3 }
-                    SegmentedControl {
-                        model: [
-                            {value: "source", label: "source"},
-                            {value: "dest", label: "force dest"},
-                        ]
-                        value: dlg.draft.chown_mode || "source"
-                        onActivated: v => dlg.set("chown_mode", v)
-                    }
                     Item { Layout.fillWidth: true }
                 }
 
-                GridLayout {
-                    visible: dlg.draft.chown_mode === "dest"
+                OwnershipEditor {
+                    id: ownershipEditor
                     Layout.fillWidth: true
-                    columns: 2
-                    columnSpacing: Theme.s3
-                    rowSpacing: 2
-
-                    Label { text: "--chown"; font.family: Theme.mono; font.pixelSize: Theme.fsMono }
-                    Label { text: "--chmod"; font.family: Theme.mono; font.pixelSize: Theme.fsMono }
-                    TextField {
-                        id: chownField
-                        Layout.fillWidth: true
-                        placeholderText: "user:group  e.g. nobody:users"
-                        onTextChanged: dlg.set("chown_value", text)
-                    }
-                    TextField {
-                        id: chmodField
-                        Layout.fillWidth: true
-                        placeholderText: "e.g. D775,F664"
-                        onTextChanged: dlg.set("chmod_value", text)
-                    }
+                    values: dlg.draft
+                    onFieldChanged: (key, v) => dlg.set(key, v)
                 }
 
                 OptionsEditor {
@@ -376,7 +349,7 @@ Dialog {
                     onOptionToggled: (key, v) => dlg.set(key, v)
                 }
 
-                SectionLabel { text: "EXCLUDES  ·  one pattern per line" }
+                SectionLabel { text: "SKIP LIST  ·  one per line" }
                 ScrollView {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 60
@@ -389,16 +362,6 @@ Dialog {
                         font.pixelSize: Theme.fsMono
                         wrapMode: TextEdit.NoWrap
                     }
-                }
-
-                SectionLabel { text: "--rsh OVERRIDE  ·  optional" }
-                TextField {
-                    id: rshField
-                    Layout.fillWidth: true
-                    placeholderText: "ssh -p 2222 -i ~/.ssh/key"
-                    onTextChanged: dlg.set("rsh", text)
-                    font.family: Theme.mono
-                    font.pixelSize: Theme.fsMono
                 }
 
                 SectionLabel {

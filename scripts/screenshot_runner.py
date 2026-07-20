@@ -63,6 +63,10 @@ def main() -> int:
     runner = SyncRunner()
     controller = ConnectionsController(db, watcher, probes, runner)
     model = ConnectionsModel(controller, db, watcher, probes)
+    # The controller's start-time mount guard would fail these demo jobs
+    # (their /tmp dests aren't under any real device's mountpoint); this
+    # script demos the output panel, not the guard, so switch it off.
+    runner.set_pre_start_check(None)
 
     engine = QQmlApplicationEngine()
     ctx = engine.rootContext()

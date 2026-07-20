@@ -6,6 +6,7 @@ LivenessDot 1.0 LivenessDot.qml
 RowActionButton 1.0 RowActionButton.qml
 OptionRow 1.0 OptionRow.qml
 OptionsEditor 1.0 OptionsEditor.qml
+OwnershipEditor 1.0 OwnershipEditor.qml
 CommandPreview 1.0 CommandPreview.qml
 IssueList 1.0 IssueList.qml
 ScrollComboBox 1.0 ScrollComboBox.qml

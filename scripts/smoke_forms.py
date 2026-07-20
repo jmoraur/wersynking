@@ -39,7 +39,8 @@ def main() -> int:
                              uuid="ffffffff-ffff-ffff-ffff-smoke0000001")
     did_remote = db.add_dest_device(container_id=cid, label="unraid-SMOKE",
                                     kind="remote",
-                                    network_target="user@nas:/mnt/backup")
+                                    network_target="user@nas:/mnt/backup",
+                                    rsh="ssh -p 2222")
     bid = db.add_binding({"source_label_id": sid, "dest_device_id": did,
                           "dest_subpath": "photos",
                           "opt_compress": True, "opt_dry_run": True})
@@ -48,6 +49,14 @@ def main() -> int:
     bid2 = db.add_binding({"source_label_id": sid, "dest_device_id": did,
                            "dest_subpath": "photos-archive",
                            "opt_delete": True})
+    # Custom-ownership binding on the remote device: exercises the
+    # OwnershipEditor parse-back and the device-level --rsh in the preview.
+    bid3 = db.add_binding({"source_label_id": sid,
+                           "dest_device_id": did_remote,
+                           "dest_subpath": "media",
+                           "chown_mode": "custom",
+                           "chown_value": "nobody:users",
+                           "chmod_value": "D755,F644"})
 
     watcher = MountWatcher()
     probes = RemoteProbeWatcher(db)
@@ -130,6 +139,13 @@ def main() -> int:
         cf_edit["dlg"] = open_dialog("connectionForm", {"bindingId": bid})
     add("03_connection_form_edit", open_cf_edit)
     add("__close", lambda: close_dialog(cf_edit["dlg"]))
+
+    # 3b. ConnectionForm (edit, custom ownership on the remote device)
+    cf_custom = {"dlg": None}
+    def open_cf_custom():
+        cf_custom["dlg"] = open_dialog("connectionForm", {"bindingId": bid3})
+    add("03b_connection_form_edit_custom", open_cf_custom)
+    add("__close", lambda: close_dialog(cf_custom["dlg"]))
 
     # 4. SourceLabelForm (edit)
     sf_state = {"dlg": None}
@@ -214,6 +230,10 @@ def main() -> int:
             pass
         try:
             db.delete_binding(bid2)
+        except Exception:
+            pass
+        try:
+            db.delete_binding(bid3)
         except Exception:
             pass
         for d in db.list_dest_devices():

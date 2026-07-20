@@ -25,6 +25,7 @@ Dialog {
     property string initialLabel: ""
     property string initialUuid: ""
     property string initialNetworkTarget: ""
+    property string initialRsh: ""
 
     signal acceptedWithId(int newId)
 
@@ -58,6 +59,7 @@ Dialog {
         _kind = dlg.initialKind || "local"
         labelField.text = dlg.initialLabel
         networkTargetField.text = dlg.initialNetworkTarget
+        rshField.text = dlg.initialRsh
         _probeResult = ""
         _refreshContainers(dlg.initialContainerId)
         _refreshUuids(dlg.initialUuid)
@@ -76,6 +78,7 @@ Dialog {
             uuid: _kind === "local" ? _selectedUuid : "",
             network_target: _kind === "remote"
                             ? networkTargetField.text.trim() : "",
+            rsh: _kind === "remote" ? rshField.text.trim() : "",
         }
         if (_kind === "local" && !draft.uuid) return
         if (_kind === "remote" && !draft.network_target) return
@@ -210,6 +213,19 @@ Dialog {
             font.family: Theme.mono
             font.pixelSize: Theme.fsMono
         }
+        SectionLabel {
+            text: "HOW TO REACH THIS SERVER (SSH)  ·  optional"
+            visible: dlg._kind === "remote"
+            Layout.topMargin: Theme.s1
+        }
+        TextField {
+            id: rshField
+            visible: dlg._kind === "remote"
+            Layout.fillWidth: true
+            placeholderText: "ssh -p 2222 -i ~/.ssh/key   (empty = plain ssh)"
+            font.family: Theme.mono
+            font.pixelSize: Theme.fsMono
+        }
         RowLayout {
             visible: dlg._kind === "remote"
             Layout.fillWidth: true
@@ -221,12 +237,12 @@ Dialog {
                 onClicked: {
                     dlg._probeResult = "probing…"
                     dlg._probeResult = remoteProbes.probeTarget(
-                        networkTargetField.text.trim(), 22)
+                        networkTargetField.text.trim(), rshField.text.trim())
                 }
             }
             Label {
                 text: dlg._probeResult === "live"        ? "✓ reachable"
-                    : dlg._probeResult === "unreachable" ? "✕ unreachable (port 22)"
+                    : dlg._probeResult === "unreachable" ? "✕ did not respond"
                     : dlg._probeResult === "probing…"    ? "probing…"
                                                          : ""
                 color: dlg._probeResult === "live" ? Theme.ok

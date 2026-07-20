@@ -39,6 +39,7 @@ Dialog {
     property int _containerId: -1
     property string _sourcePath: ""
     property string _browseWarning: ""
+    property string _skipWarning: ""
 
     // Snapshots from the controller, refreshed each open + after
     // inline-create.
@@ -54,10 +55,29 @@ Dialog {
         ? connections.deviceMountpoint(draft.dest_device_id)
         : ""
 
+    // Inline pre-flight, recomputed on every set(). Display-only here —
+    // saving a connection whose disk is unplugged stays legal; the same
+    // issues gate the actual run in SyncConfirmDialog.
+    readonly property var _draftIssues: connections.preflightDraft(dlg.draft)
+
+    // Where the files will actually land, shown under the subpath field.
+    readonly property var _resolvedDest:
+        connections.resolvedDestination(dlg.draft)
+
     function set(key, value) {
         const d = Object.assign({}, draft)
         d[key] = value
         draft = d
+    }
+
+    // Append one pattern to the skip list unless it's already there.
+    // Writing excludesArea.text feeds the draft via its onTextChanged.
+    function _appendSkip(pattern) {
+        const lines = (excludesArea.text || "").split("\n")
+            .map(s => s.trim()).filter(s => s !== "")
+        if (lines.indexOf(pattern) !== -1) return
+        lines.push(pattern)
+        excludesArea.text = lines.join("\n")
     }
 
     function _refreshSources(preselectId) {
@@ -98,7 +118,7 @@ Dialog {
         const d = {
             source_label_id: 0, dest_device_id: 0, dest_subpath: "",
             path_mode: "contents", chown_mode: "source",
-            chown_value: "", chmod_value: "", excludes: "", rsh: "",
+            chown_value: "", chmod_value: "", excludes: "",
         }
         for (const o of _catalog) d[o.key] = o.default ? 1 : 0
         return d
@@ -106,10 +126,8 @@ Dialog {
 
     function _loadTextFields() {
         subpathField.text = draft.dest_subpath || ""
-        chownField.text = draft.chown_value || ""
-        chmodField.text = draft.chmod_value || ""
         excludesArea.text = draft.excludes || ""
-        rshField.text = draft.rsh || ""
+        ownershipEditor.load()
     }
 
     function _loadForAdd() {
@@ -143,6 +161,7 @@ Dialog {
     onAboutToShow: {
         _catalog = connections.optionCatalog()
         _browseWarning = ""
+        _skipWarning = ""
         if (dlg.bindingId === -1) _loadForAdd()
         else _loadForEdit()
     }
@@ -159,350 +178,375 @@ Dialog {
         dlg.acceptedWithId(newId)
     }
 
-    contentItem: ScrollView {
-        clip: true
-        contentWidth: availableWidth
+    // The form scrolls; the command preview and inline issues stay pinned
+    // below it, above the Save/Cancel footer. (Width is set on the Dialog,
+    // never implicitWidth on the contentItem — Fusion trap, see lessons.)
+    contentItem: ColumnLayout {
+        spacing: Theme.s2
 
-        ColumnLayout {
-            width: parent.width
-            spacing: Theme.s3
+        ScrollView {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            contentWidth: availableWidth
 
-            // ---- Source | Destination side-by-side panels -------------
-            RowLayout {
-                Layout.fillWidth: true
+            ColumnLayout {
+                width: parent.width
                 spacing: Theme.s3
 
-                GroupBox {
+                // ---- Source | Destination side-by-side panels -------------
+                RowLayout {
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 1   // equal split
-                    Layout.alignment: Qt.AlignTop
-                    title: "Source"
+                    spacing: Theme.s3
 
-                    ColumnLayout {
-                        anchors.fill: parent
-                        spacing: Theme.s2
+                    GroupBox {
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1   // equal split
+                        Layout.alignment: Qt.AlignTop
+                        title: "Source"
 
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.s1
-
-                            ScrollComboBox {
-                                id: sourceCombo
-                                Layout.fillWidth: true
-                                model: dlg._sources
-                                textRole: "display"
-                                valueRole: "id"
-                                displayText: currentIndex === -1
-                                             ? "— pick a source —" : currentText
-                                onActivated: {
-                                    dlg.set("source_label_id", currentValue || 0)
-                                    dlg._syncSourcePath()
-                                }
-                            }
-                            RowActionButton {
-                                icon.name: "list-add"
-                                tip: "New source"
-                                onClicked: {
-                                    childSourceForm.sourceLabelId = -1
-                                    childSourceForm.initialLabel = ""
-                                    childSourceForm.initialPath = ""
-                                    childSourceForm.open()
-                                }
-                            }
-                            RowActionButton {
-                                icon.name: "document-edit"
-                                tip: "Edit selected source"
-                                enabled: (dlg.draft.source_label_id || 0) > 0
-                                onClicked: {
-                                    const row = connections.getSourceLabel(
-                                        dlg.draft.source_label_id)
-                                    if (!row.id) return
-                                    childSourceForm.sourceLabelId = row.id
-                                    childSourceForm.initialLabel = row.label || ""
-                                    childSourceForm.initialPath = row.path || ""
-                                    childSourceForm.open()
-                                }
-                            }
-                        }
-
-                        Label {
-                            Layout.fillWidth: true
-                            elide: Text.ElideMiddle
-                            opacity: 0.65
-                            font.family: Theme.mono
-                            font.pixelSize: Theme.fsMono
-                            text: (dlg.draft.source_label_id || 0) > 0
-                                  ? dlg._sourcePath
-                                  : "—"
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.s2
-                            Label { text: "Path mode"; opacity: 0.75 }
-                            SegmentedControl {
-                                model: [
-                                    {value: "contents", label: "contents/"},
-                                    {value: "folder", label: "folder"},
-                                ]
-                                value: dlg.draft.path_mode || "contents"
-                                onActivated: v => dlg.set("path_mode", v)
-                            }
-                            Label {
-                                text: dlg.draft.path_mode === "folder"
-                                      ? "copies the folder itself"
-                                      : "copies what's inside"
-                                opacity: 0.5
-                                font.pixelSize: Theme.fsSmall
-                                Layout.fillWidth: true
-                                elide: Text.ElideRight
-                            }
-                        }
-                    }
-                }
-
-                GroupBox {
-                    Layout.fillWidth: true
-                    Layout.preferredWidth: 1   // equal split
-                    Layout.alignment: Qt.AlignTop
-                    title: "Destination"
-
-                    GridLayout {
-                        anchors.fill: parent
-                        columns: 2
-                        columnSpacing: Theme.s2
-                        rowSpacing: Theme.s2
-
-                        Label { text: "Container"; opacity: 0.75 }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.s1
-
-                            ScrollComboBox {
-                                id: containerCombo
-                                Layout.fillWidth: true
-                                model: dlg._containers
-                                textRole: "label"
-                                valueRole: "id"
-                                displayText: currentIndex === -1
-                                             ? "— pick a container —" : currentText
-                                onActivated: {
-                                    dlg._containerId = currentValue || -1
-                                    dlg._refreshDevices(-1)
-                                }
-                            }
-                            RowActionButton {
-                                icon.name: "list-add"
-                                tip: "New container"
-                                onClicked: {
-                                    childContainerForm.containerId = -1
-                                    childContainerForm.initialLabel = ""
-                                    childContainerForm.open()
-                                }
-                            }
-                            RowActionButton {
-                                icon.name: "document-edit"
-                                tip: "Edit selected container"
-                                enabled: dlg._containerId > 0
-                                onClicked: {
-                                    const row = connections.getDestContainer(
-                                        dlg._containerId)
-                                    if (!row.id) return
-                                    childContainerForm.containerId = row.id
-                                    childContainerForm.initialLabel = row.label || ""
-                                    childContainerForm.open()
-                                }
-                            }
-                        }
-
-                        Label { text: "Device"; opacity: 0.75 }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.s1
-
-                            ScrollComboBox {
-                                id: deviceCombo
-                                Layout.fillWidth: true
-                                enabled: dlg._containerId > 0
-                                model: dlg._devices
-                                textRole: "label"
-                                valueRole: "id"
-                                displayText: !enabled
-                                             ? "— pick a container first —"
-                                             : (currentIndex === -1
-                                                ? "— pick a device —"
-                                                : currentText)
-                                onActivated: {
-                                    dlg.set("dest_device_id", currentValue || 0)
-                                    dlg._browseWarning = ""
-                                }
-                            }
-                            RowActionButton {
-                                icon.name: "list-add"
-                                tip: "New device"
-                                enabled: dlg._containerId > 0
-                                onClicked: {
-                                    childDeviceForm.deviceId = -1
-                                    childDeviceForm.initialContainerId = dlg._containerId
-                                    childDeviceForm.initialKind = "local"
-                                    childDeviceForm.initialLabel = ""
-                                    childDeviceForm.initialUuid = ""
-                                    childDeviceForm.initialNetworkTarget = ""
-                                    childDeviceForm.open()
-                                }
-                            }
-                            RowActionButton {
-                                icon.name: "document-edit"
-                                tip: "Edit selected device"
-                                enabled: (dlg.draft.dest_device_id || 0) > 0
-                                onClicked: {
-                                    const row = connections.getDestDevice(
-                                        dlg.draft.dest_device_id)
-                                    if (!row.id) return
-                                    childDeviceForm.deviceId = row.id
-                                    childDeviceForm.initialContainerId = row.container_id || -1
-                                    childDeviceForm.initialKind = row.kind || "local"
-                                    childDeviceForm.initialLabel = row.label || ""
-                                    childDeviceForm.initialUuid = row.uuid || ""
-                                    childDeviceForm.initialNetworkTarget = row.network_target || ""
-                                    childDeviceForm.open()
-                                }
-                            }
-                        }
-
-                        Label {
-                            text: "Subpath"
-                            opacity: 0.75
-                            Layout.alignment: Qt.AlignTop
-                        }
                         ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 2
+                            anchors.fill: parent
+                            spacing: Theme.s2
 
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: Theme.s1
 
-                                TextField {
-                                    id: subpathField
+                                ScrollComboBox {
+                                    id: sourceCombo
                                     Layout.fillWidth: true
-                                    placeholderText: "(empty = device root)"
-                                    onTextChanged: dlg.set("dest_subpath", text)
+                                    model: dlg._sources
+                                    textRole: "display"
+                                    valueRole: "id"
+                                    displayText: currentIndex === -1
+                                                 ? "— pick a source —" : currentText
+                                    onActivated: {
+                                        dlg.set("source_label_id", currentValue || 0)
+                                        dlg._syncSourcePath()
+                                    }
                                 }
                                 RowActionButton {
-                                    icon.name: "folder-open"
-                                    tip: (dlg.draft.dest_device_id || 0) <= 0
-                                         ? "Pick a device first"
-                                         : (dlg._destMountpoint === ""
-                                            ? "Browsing needs a local device that's mounted now"
-                                            : "Browse the device")
-                                    enabled: dlg._destMountpoint !== ""
-                                    onClicked: destFolderDialog.open()
+                                    icon.name: "list-add"
+                                    tip: "New source"
+                                    onClicked: {
+                                        childSourceForm.sourceLabelId = -1
+                                        childSourceForm.initialLabel = ""
+                                        childSourceForm.initialPath = ""
+                                        childSourceForm.open()
+                                    }
+                                }
+                                RowActionButton {
+                                    icon.name: "document-edit"
+                                    tip: "Edit selected source"
+                                    enabled: (dlg.draft.source_label_id || 0) > 0
+                                    onClicked: {
+                                        const row = connections.getSourceLabel(
+                                            dlg.draft.source_label_id)
+                                        if (!row.id) return
+                                        childSourceForm.sourceLabelId = row.id
+                                        childSourceForm.initialLabel = row.label || ""
+                                        childSourceForm.initialPath = row.path || ""
+                                        childSourceForm.open()
+                                    }
                                 }
                             }
+
                             Label {
                                 Layout.fillWidth: true
-                                visible: dlg._browseWarning !== ""
-                                text: dlg._browseWarning
-                                color: Theme.error
-                                font.pixelSize: Theme.fsSmall
-                                wrapMode: Text.Wrap
+                                elide: Text.ElideMiddle
+                                opacity: 0.65
+                                font.family: Theme.mono
+                                font.pixelSize: Theme.fsMono
+                                text: (dlg.draft.source_label_id || 0) > 0
+                                      ? dlg._sourcePath
+                                      : "—"
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Theme.s2
+                                Label { text: "Path mode"; opacity: 0.75 }
+                                SegmentedControl {
+                                    model: [
+                                        {value: "contents", label: "contents/"},
+                                        {value: "folder", label: "folder"},
+                                    ]
+                                    value: dlg.draft.path_mode || "contents"
+                                    onActivated: v => dlg.set("path_mode", v)
+                                }
+                                Label {
+                                    text: dlg.draft.path_mode === "folder"
+                                          ? "copies the folder itself"
+                                          : "copies what's inside"
+                                    opacity: 0.5
+                                    font.pixelSize: Theme.fsSmall
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+                    }
+
+                    GroupBox {
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1   // equal split
+                        Layout.alignment: Qt.AlignTop
+                        title: "Destination"
+
+                        GridLayout {
+                            anchors.fill: parent
+                            columns: 2
+                            columnSpacing: Theme.s2
+                            rowSpacing: Theme.s2
+
+                            Label { text: "Container"; opacity: 0.75 }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Theme.s1
+
+                                ScrollComboBox {
+                                    id: containerCombo
+                                    Layout.fillWidth: true
+                                    model: dlg._containers
+                                    textRole: "label"
+                                    valueRole: "id"
+                                    displayText: currentIndex === -1
+                                                 ? "— pick a container —" : currentText
+                                    onActivated: {
+                                        dlg._containerId = currentValue || -1
+                                        dlg._refreshDevices(-1)
+                                    }
+                                }
+                                RowActionButton {
+                                    icon.name: "list-add"
+                                    tip: "New container"
+                                    onClicked: {
+                                        childContainerForm.containerId = -1
+                                        childContainerForm.initialLabel = ""
+                                        childContainerForm.open()
+                                    }
+                                }
+                                RowActionButton {
+                                    icon.name: "document-edit"
+                                    tip: "Edit selected container"
+                                    enabled: dlg._containerId > 0
+                                    onClicked: {
+                                        const row = connections.getDestContainer(
+                                            dlg._containerId)
+                                        if (!row.id) return
+                                        childContainerForm.containerId = row.id
+                                        childContainerForm.initialLabel = row.label || ""
+                                        childContainerForm.open()
+                                    }
+                                }
+                            }
+
+                            Label { text: "Device"; opacity: 0.75 }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Theme.s1
+
+                                ScrollComboBox {
+                                    id: deviceCombo
+                                    Layout.fillWidth: true
+                                    enabled: dlg._containerId > 0
+                                    model: dlg._devices
+                                    textRole: "label"
+                                    valueRole: "id"
+                                    displayText: !enabled
+                                                 ? "— pick a container first —"
+                                                 : (currentIndex === -1
+                                                    ? "— pick a device —"
+                                                    : currentText)
+                                    onActivated: {
+                                        dlg.set("dest_device_id", currentValue || 0)
+                                        dlg._browseWarning = ""
+                                    }
+                                }
+                                RowActionButton {
+                                    icon.name: "list-add"
+                                    tip: "New device"
+                                    enabled: dlg._containerId > 0
+                                    onClicked: {
+                                        childDeviceForm.deviceId = -1
+                                        childDeviceForm.initialContainerId = dlg._containerId
+                                        childDeviceForm.initialKind = "local"
+                                        childDeviceForm.initialLabel = ""
+                                        childDeviceForm.initialUuid = ""
+                                        childDeviceForm.initialNetworkTarget = ""
+                                        childDeviceForm.initialRsh = ""
+                                        childDeviceForm.open()
+                                    }
+                                }
+                                RowActionButton {
+                                    icon.name: "document-edit"
+                                    tip: "Edit selected device"
+                                    enabled: (dlg.draft.dest_device_id || 0) > 0
+                                    onClicked: {
+                                        const row = connections.getDestDevice(
+                                            dlg.draft.dest_device_id)
+                                        if (!row.id) return
+                                        childDeviceForm.deviceId = row.id
+                                        childDeviceForm.initialContainerId = row.container_id || -1
+                                        childDeviceForm.initialKind = row.kind || "local"
+                                        childDeviceForm.initialLabel = row.label || ""
+                                        childDeviceForm.initialUuid = row.uuid || ""
+                                        childDeviceForm.initialNetworkTarget = row.network_target || ""
+                                        childDeviceForm.initialRsh = row.rsh || ""
+                                        childDeviceForm.open()
+                                    }
+                                }
+                            }
+
+                            Label {
+                                text: "Subpath"
+                                opacity: 0.75
+                                Layout.alignment: Qt.AlignTop
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Theme.s1
+
+                                    TextField {
+                                        id: subpathField
+                                        Layout.fillWidth: true
+                                        placeholderText: "(empty = device root)"
+                                        onTextChanged: dlg.set("dest_subpath", text)
+                                    }
+                                    RowActionButton {
+                                        icon.name: "folder-open"
+                                        tip: (dlg.draft.dest_device_id || 0) <= 0
+                                             ? "Pick a device first"
+                                             : (dlg._destMountpoint === ""
+                                                ? "Browsing needs a local device that's mounted now"
+                                                : "Browse the device")
+                                        enabled: dlg._destMountpoint !== ""
+                                        onClicked: destFolderDialog.open()
+                                    }
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    visible: dlg._browseWarning !== ""
+                                    text: dlg._browseWarning
+                                    color: Theme.error
+                                    font.pixelSize: Theme.fsSmall
+                                    wrapMode: Text.Wrap
+                                }
+                                Label {
+                                    // Where the files will land, resolved live.
+                                    Layout.fillWidth: true
+                                    visible: text !== ""
+                                    text: {
+                                        const r = dlg._resolvedDest
+                                        if (!r || (!r.path && !r.note)) return ""
+                                        if (!r.path) return "(" + r.note + ")"
+                                        return r.path
+                                            + (r.note ? "   (" + r.note + ")" : "")
+                                    }
+                                    opacity: 0.6
+                                    font.family: Theme.mono
+                                    font.pixelSize: Theme.fsSmall
+                                    elide: Text.ElideMiddle
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // ---- Ownership & permissions ------------------------------
-            SectionLabel {
-                text: "OWNERSHIP & PERMISSIONS"
-                Layout.topMargin: Theme.s1
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.s2
-
-                SegmentedControl {
-                    model: [
-                        {value: "source", label: "Use source values"},
-                        {value: "dest", label: "Force dest values"},
-                    ]
-                    value: dlg.draft.chown_mode || "source"
-                    onActivated: v => dlg.set("chown_mode", v)
-                }
-                Item { Layout.fillWidth: true }
-            }
-
-            GridLayout {
-                visible: dlg.draft.chown_mode === "dest"
-                Layout.fillWidth: true
-                columns: 2
-                columnSpacing: Theme.s3
-                rowSpacing: 2
-
-                Label { text: "--chown"; font.family: Theme.mono; font.pixelSize: Theme.fsMono }
-                Label { text: "--chmod"; font.family: Theme.mono; font.pixelSize: Theme.fsMono }
-                TextField {
-                    id: chownField
+                // ---- Ownership & permissions ------------------------------
+                OwnershipEditor {
+                    id: ownershipEditor
                     Layout.fillWidth: true
-                    placeholderText: "user:group  e.g. nobody:users"
-                    onTextChanged: dlg.set("chown_value", text)
+                    Layout.topMargin: Theme.s1
+                    values: dlg.draft
+                    onFieldChanged: (key, v) => dlg.set(key, v)
                 }
-                TextField {
-                    id: chmodField
+
+                // ---- Options (catalog-driven) -----------------------------
+                OptionsEditor {
                     Layout.fillWidth: true
-                    placeholderText: "e.g. D775,F664"
-                    onTextChanged: dlg.set("chmod_value", text)
+                    Layout.topMargin: Theme.s1
+                    catalog: dlg._catalog
+                    values: dlg.draft
+                    onOptionToggled: (key, v) => dlg.set(key, v)
                 }
-            }
 
-            // ---- Options (catalog-driven) -----------------------------
-            OptionsEditor {
-                Layout.fillWidth: true
-                Layout.topMargin: Theme.s1
-                catalog: dlg._catalog
-                values: dlg.draft
-                onOptionToggled: (key, v) => dlg.set(key, v)
-            }
-
-            // ---- Excludes + rsh ---------------------------------------
-            SectionLabel {
-                text: "EXCLUDES  ·  one pattern per line"
-                Layout.topMargin: Theme.s1
-            }
-            ScrollView {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 72
-
-                TextArea {
-                    id: excludesArea
-                    placeholderText: ".cache/\n*.tmp"
-                    onTextChanged: dlg.set("excludes", text)
-                    font.family: Theme.mono
-                    font.pixelSize: Theme.fsMono
-                    wrapMode: TextEdit.NoWrap
+                // ---- Skip list --------------------------------------------
+                SectionLabel {
+                    text: "SKIP LIST  ·  folders and files not to copy, one per line"
+                    Layout.topMargin: Theme.s1
                 }
-            }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.s1
 
-            SectionLabel { text: "--rsh OVERRIDE  ·  optional" }
-            TextField {
-                id: rshField
-                Layout.fillWidth: true
-                placeholderText: "ssh -p 2222 -i ~/.ssh/key"
-                onTextChanged: dlg.set("rsh", text)
-                font.family: Theme.mono
-                font.pixelSize: Theme.fsMono
-            }
+                    Button {
+                        text: "Add folder…"
+                        enabled: dlg._sourcePath !== ""
+                        onClicked: skipFolderDialog.open()
+                    }
+                    // Common-junk presets; click appends if not already listed.
+                    Repeater {
+                        model: [".cache/", "*.tmp", ".Trash-*/", "lost+found/"]
+                        Button {
+                            text: modelData
+                            flat: true
+                            font.family: Theme.mono
+                            font.pixelSize: Theme.fsMono
+                            onClicked: dlg._appendSkip(modelData)
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                ScrollView {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 72
 
-            // ---- Live preview -----------------------------------------
-            SectionLabel {
-                text: "COMMAND PREVIEW"
-                Layout.topMargin: Theme.s1
+                    TextArea {
+                        id: excludesArea
+                        placeholderText: ".cache/\n*.tmp"
+                        onTextChanged: dlg.set("excludes", text)
+                        font.family: Theme.mono
+                        font.pixelSize: Theme.fsMono
+                        wrapMode: TextEdit.NoWrap
+                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    visible: dlg._skipWarning !== ""
+                    text: dlg._skipWarning
+                    color: Theme.error
+                    font.pixelSize: Theme.fsSmall
+                    wrapMode: Text.Wrap
+                }
+
             }
-            CommandPreview {
-                Layout.fillWidth: true
-                argv: connections.previewCommand(dlg.draft)
+        }
+
+        // ---- Pinned zone: live preview + inline pre-flight ------------
+        SectionLabel { text: "COMMAND PREVIEW" }
+        CommandPreview {
+            Layout.fillWidth: true
+            argv: connections.previewCommand(dlg.draft)
+        }
+        ScrollView {
+            // Capped so a pile of warnings can't squeeze the form away.
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.min(inlineIssues.implicitHeight, 120)
+            visible: dlg._draftIssues.length > 0
+            clip: true
+            contentWidth: availableWidth
+
+            IssueList {
+                id: inlineIssues
+                width: parent.width
+                ackable: false
+                issues: dlg._draftIssues
             }
         }
     }
@@ -533,6 +577,34 @@ Dialog {
                 dlg._browseWarning =
                     "That folder is outside the selected device — pick a folder under " + base
             }
+        }
+    }
+
+    // ---- Skip-list folder picker --------------------------------------
+    // Rooted at the source; stores the picked folder as a pattern relative
+    // to what rsync actually transfers. In folder mode the transfer starts
+    // one level up (the source folder itself is copied), so the pattern
+    // gets the source folder's name prefixed — the user never has to know.
+    Labs.FolderDialog {
+        id: skipFolderDialog
+        title: "Choose a folder to skip"
+        currentFolder: "file://" + dlg._sourcePath
+        onAccepted: {
+            const url = folder.toString()
+            const picked = url.startsWith("file://") ? url.slice(7) : url
+            const base = dlg._sourcePath.replace(/\/+$/, "")
+            if (!picked.startsWith(base + "/")) {
+                dlg._skipWarning = picked === base
+                    ? "That's the whole source — pick a folder inside it."
+                    : "That folder is not inside the source — pick one under "
+                      + base
+                return
+            }
+            dlg._skipWarning = ""
+            let rel = picked.slice(base.length + 1) + "/"
+            if ((dlg.draft.path_mode || "contents") === "folder")
+                rel = base.slice(base.lastIndexOf("/") + 1) + "/" + rel
+            dlg._appendSkip(rel)
         }
     }
 

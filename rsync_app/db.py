@@ -1,3 +1,4 @@
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -21,7 +22,6 @@ BINDING_DEFAULTS = {
     "chmod_value": None,
     **{o["key"]: int(o["default"]) for o in OPTIONS},
     "excludes": None,
-    "rsh": None,
 }
 
 # Every writable bindings column, in schema order.
@@ -32,6 +32,32 @@ _OPT_COLS_SQL = ",\n    ".join(
     f"CHECK ({o['key']} IN (0, 1))"
     for o in OPTIONS
 )
+
+
+def _bindings_ddl(name: str, if_not_exists: bool = False) -> str:
+    """The bindings table DDL, shared by SCHEMA and the rebuild migration so
+    a rebuilt table is guaranteed identical to a freshly created one."""
+    ine = "IF NOT EXISTS " if if_not_exists else ""
+    return f"""
+CREATE TABLE {ine}{name} (
+    id               INTEGER PRIMARY KEY,
+    source_label_id  INTEGER NOT NULL
+                     REFERENCES source_labels(id) ON DELETE CASCADE,
+    dest_device_id   INTEGER NOT NULL
+                     REFERENCES dest_devices(id) ON DELETE CASCADE,
+    dest_subpath     TEXT NOT NULL DEFAULT '',
+    path_mode        TEXT NOT NULL DEFAULT 'contents'
+                     CHECK (path_mode IN ('contents', 'folder')),
+    chown_mode       TEXT NOT NULL DEFAULT 'source'
+                     CHECK (chown_mode IN ('source', 'dest', 'custom')),
+    chown_value      TEXT,
+    chmod_value      TEXT,
+    {_OPT_COLS_SQL},
+    excludes         TEXT,
+    UNIQUE (source_label_id, dest_device_id, dest_subpath)
+);
+"""
+
 
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS source_labels (
@@ -54,6 +80,7 @@ CREATE TABLE IF NOT EXISTS dest_devices (
                     CHECK (kind IN ('local', 'remote')),
     uuid            TEXT,
     network_target  TEXT,
+    rsh             TEXT,
     CHECK (
         (kind = 'local'  AND uuid IS NOT NULL AND network_target IS NULL) OR
         (kind = 'remote' AND network_target IS NOT NULL AND uuid IS NULL)
@@ -61,24 +88,7 @@ CREATE TABLE IF NOT EXISTS dest_devices (
     UNIQUE (uuid)
 );
 
-CREATE TABLE IF NOT EXISTS bindings (
-    id               INTEGER PRIMARY KEY,
-    source_label_id  INTEGER NOT NULL
-                     REFERENCES source_labels(id) ON DELETE CASCADE,
-    dest_device_id   INTEGER NOT NULL
-                     REFERENCES dest_devices(id) ON DELETE CASCADE,
-    dest_subpath     TEXT NOT NULL DEFAULT '',
-    path_mode        TEXT NOT NULL DEFAULT 'contents'
-                     CHECK (path_mode IN ('contents', 'folder')),
-    chown_mode       TEXT NOT NULL DEFAULT 'source'
-                     CHECK (chown_mode IN ('source', 'dest')),
-    chown_value      TEXT,
-    chmod_value      TEXT,
-    {_OPT_COLS_SQL},
-    excludes         TEXT,
-    rsh              TEXT,
-    UNIQUE (source_label_id, dest_device_id, dest_subpath)
-);
+{_bindings_ddl("bindings", if_not_exists=True)}
 """
 
 
@@ -106,6 +116,7 @@ class Database(QObject):
         self._conn.executescript(SCHEMA)
         self._migrate_baseline_opts()
         self._migrate_source_unique()
+        self._migrate_options_ux()
         self._conn.commit()
 
     def _migrate_baseline_opts(self) -> None:
@@ -163,6 +174,77 @@ class Database(QObject):
             """
         )
         self._conn.commit()
+        self._conn.execute("PRAGMA foreign_keys = ON")
+
+    def _migrate_options_ux(self) -> None:
+        """Move rsh from bindings to dest_devices and widen chown_mode.
+
+        Old shape: bindings carried `rsh` per connection and chown_mode was
+        CHECK IN ('source', 'dest'). New shape: `rsh` lives on dest_devices
+        (it describes how to reach a device), and chown_mode gains 'custom'
+        ('dest' now means the fixed like-in-destination recipe; 'custom' is
+        the old force-these-exact-values behavior). Backfill copies each
+        remote device's most common binding rsh, then bindings is rebuilt
+        without the column. Fresh DBs match both predicates and are skipped.
+        """
+        device_cols = {row["name"] for row in
+                       self._conn.execute("PRAGMA table_info(dest_devices)")}
+        if "rsh" not in device_cols:
+            self._conn.execute("ALTER TABLE dest_devices ADD COLUMN rsh TEXT")
+
+        binding_cols = {row["name"] for row in
+                       self._conn.execute("PRAGMA table_info(bindings)")}
+        if "rsh" not in binding_cols:
+            return  # already the new shape
+
+        # One-time file backup before the destructive rebuild.
+        backup = self.path.with_name(self.path.name + ".pre-options-ux.bak")
+        if self.path.exists() and not backup.exists():
+            self._conn.commit()
+            shutil.copy2(self.path, backup)
+
+        # Backfill before the rebuild drops bindings.rsh. Most common
+        # non-blank value per device, deterministic tie-break; the
+        # `rsh IS NULL` guard keeps a partial earlier run from being
+        # clobbered on retry.
+        self._conn.execute(
+            """
+            UPDATE dest_devices SET rsh = (
+                SELECT b.rsh FROM bindings b
+                WHERE b.dest_device_id = dest_devices.id
+                  AND NULLIF(TRIM(b.rsh), '') IS NOT NULL
+                GROUP BY b.rsh
+                ORDER BY COUNT(*) DESC, b.rsh
+                LIMIT 1)
+            WHERE kind = 'remote' AND rsh IS NULL
+            """
+        )
+
+        # Old 'dest' rows with values meant "force these exact values" —
+        # that is the new 'custom'. Value-less 'dest' rows keep 'dest'
+        # (the new fixed recipe is the closest preserved intent).
+        select_cols = ", ".join(
+            """CASE WHEN chown_mode = 'dest'
+                     AND (NULLIF(TRIM(chown_value), '') IS NOT NULL
+                          OR NULLIF(TRIM(chmod_value), '') IS NOT NULL)
+                    THEN 'custom' ELSE chown_mode END"""
+            if col == "chown_mode" else col
+            for col in ("id", *BINDING_COLS)
+        )
+        self._conn.commit()
+        self._conn.execute("PRAGMA foreign_keys = OFF")
+        self._conn.executescript(
+            f"""
+            DROP TABLE IF EXISTS bindings_new;
+            BEGIN IMMEDIATE;
+            {_bindings_ddl("bindings_new")}
+            INSERT INTO bindings_new (id, {", ".join(BINDING_COLS)})
+                SELECT {select_cols} FROM bindings;
+            DROP TABLE bindings;
+            ALTER TABLE bindings_new RENAME TO bindings;
+            COMMIT;
+            """
+        )
         self._conn.execute("PRAGMA foreign_keys = ON")
 
     # --- source_labels ------------------------------------------------------
@@ -227,12 +309,13 @@ class Database(QObject):
 
     def add_dest_device(self, *, container_id: int, label: str, kind: str,
                         uuid: str | None = None,
-                        network_target: str | None = None) -> int:
+                        network_target: str | None = None,
+                        rsh: str | None = None) -> int:
         cur = self._conn.execute(
             "INSERT INTO dest_devices("
-            "container_id, label, kind, uuid, network_target"
-            ") VALUES (?, ?, ?, ?, ?)",
-            (container_id, label, kind, uuid, network_target),
+            "container_id, label, kind, uuid, network_target, rsh"
+            ") VALUES (?, ?, ?, ?, ?, ?)",
+            (container_id, label, kind, uuid, network_target, rsh),
         )
         self._conn.commit()
         self.db_changed.emit()
@@ -240,9 +323,10 @@ class Database(QObject):
 
     def update_dest_device(self, device_id: int, *,
                            container_id=_UNSET, label=_UNSET, kind=_UNSET,
-                           uuid=_UNSET, network_target=_UNSET) -> None:
+                           uuid=_UNSET, network_target=_UNSET,
+                           rsh=_UNSET) -> None:
         changes = self._collect_changes(
-            ["container_id", "label", "kind", "uuid", "network_target"],
+            ["container_id", "label", "kind", "uuid", "network_target", "rsh"],
             locals(),
         )
         self._apply_update("dest_devices", device_id, changes)

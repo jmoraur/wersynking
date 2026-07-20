@@ -85,6 +85,7 @@ class ConnectionsController(QObject):
             "uuid": (draft.get("uuid") or None) if kind == "local" else None,
             "network_target": (draft.get("network_target") or None)
                               if kind == "remote" else None,
+            "rsh": (draft.get("rsh") or None) if kind == "remote" else None,
         }
 
     @Slot("QVariantMap", result=int)
@@ -460,6 +461,34 @@ class ConnectionsController(QObject):
                                      mounts, reachable),
         )
 
+    @Slot("QVariantMap", result="QVariantMap")
+    def resolvedDestination(self, draft: dict) -> dict:
+        """Live resolved destination path for a draft, for display under
+        the subpath field: {"path": str, "note": str}.
+
+        Needs only dest_device_id (+ dest_subpath); unlike previewCommand
+        it renders before a source is picked. The note is plain-language
+        ("will be created" / "drive is not connected"); remote paths get
+        no note — the app never inspects the server.
+        """
+        did = draft.get("dest_device_id")
+        if not did:
+            return {"path": "", "note": ""}
+        d = next((row for row in self._db.list_dest_devices()
+                  if row["id"] == did), None)
+        if d is None:
+            return {"path": "", "note": ""}
+        sub = (draft.get("dest_subpath") or "").strip("/")
+        if d["kind"] == "local":
+            mp = self._mounts.state().get(d["uuid"])
+            if not mp:
+                return {"path": "", "note": "drive is not connected"}
+            path = f"{mp.rstrip('/')}/{sub}" if sub else mp
+            note = "" if os.path.isdir(path) else "will be created"
+            return {"path": path, "note": note}
+        target = (d.get("network_target") or "").rstrip("/")
+        return {"path": f"{target}/{sub}" if sub else target, "note": ""}
+
     # =====================================================================
     # internals — row construction
     # =====================================================================
@@ -668,5 +697,6 @@ class ConnectionsController(QObject):
                 "kind": "remote",
                 "base": dest_device["network_target"] or "",
                 "subpath": binding_row.get("dest_subpath", "") or "",
+                "rsh": dest_device.get("rsh") or "",
             }
         return build_rsync_argv(binding_row, source_ctx, dest_ctx)

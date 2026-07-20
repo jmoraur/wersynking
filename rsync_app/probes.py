@@ -1,3 +1,4 @@
+import shlex
 import socket
 from concurrent.futures import ThreadPoolExecutor
 
@@ -50,17 +51,19 @@ class RemoteProbeWatcher(QObject):
     def refresh(self) -> None:
         self._refresh()
 
-    @Slot(str, int, result=str)
-    def probeTarget(self, target: str, port: int = 22) -> str:
+    @Slot(str, str, result=str)
+    def probeTarget(self, target: str, rsh: str = "") -> str:
         """One-shot probe against an arbitrary `user@host:/path` string.
 
         Used by the DeviceForm 'Test connection' button before the device
-        is saved. Synchronous on the calling thread; the user clicked.
+        is saved — `rsh` is the form's unsaved ssh-command field, so a
+        `-p 2222` in it is honored. Synchronous on the calling thread;
+        the user clicked.
         """
         host = self._host_from_target(target)
         if not host:
             return "unreachable"
-        return self._tcp_probe(host, port or 22)
+        return self._tcp_probe(host, self._port_from_rsh(rsh))
 
     @Slot(int, result=str)
     def probeOne(self, device_id: int) -> str:
@@ -132,7 +135,31 @@ class RemoteProbeWatcher(QObject):
         )
         if not host:
             return "unreachable"
-        return RemoteProbeWatcher._tcp_probe(host, 22)
+        port = RemoteProbeWatcher._port_from_rsh(device.get("rsh") or "")
+        return RemoteProbeWatcher._tcp_probe(host, port)
+
+    @staticmethod
+    def _port_from_rsh(rsh: str) -> int:
+        """Pull the ssh port out of a device's rsh string, default 22.
+
+        Understands `-p 2222` and `-p2222` anywhere in the string; a
+        malformed string (unbalanced quotes, non-numeric port) falls back
+        to 22 rather than failing the probe.
+        """
+        try:
+            tokens = shlex.split(rsh or "")
+        except ValueError:
+            return 22
+        for i, tok in enumerate(tokens):
+            if tok == "-p" and i + 1 < len(tokens):
+                candidate = tokens[i + 1]
+            elif tok.startswith("-p") and len(tok) > 2:
+                candidate = tok[2:]
+            else:
+                continue
+            if candidate.isdigit():
+                return int(candidate)
+        return 22
 
     @staticmethod
     def _host_from_target(target: str) -> str:
