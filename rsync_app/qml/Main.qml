@@ -9,7 +9,7 @@ ApplicationWindow {
     width: 1100
     height: 720
     visible: true
-    title: "We RSynk-ing"
+    title: "WeRSynking"
 
     Settings {
         category: "window"

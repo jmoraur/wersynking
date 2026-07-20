@@ -12,6 +12,7 @@ from rsync_app.models import ConnectionsModel
 from rsync_app.mounts import MountWatcher
 from rsync_app.probes import RemoteProbeWatcher
 from rsync_app.runner import SyncRunner
+from rsync_app.theme import ThemeBridge
 from rsync_app.tray import TrayController
 
 
@@ -25,8 +26,9 @@ def run() -> int:
     # Wayland app_id → desktop-file association (icon + window grouping).
     # Distinct from the QSettings names above, which stay "RsyncApp" so the
     # existing config/DB paths keep working.
-    app.setDesktopFileName("we-rsynk-ing")
+    app.setDesktopFileName("wersynking")
     QQuickStyle.setStyle("Fusion")
+    theme = ThemeBridge()
 
     db = Database()
     watcher = MountWatcher()
@@ -41,6 +43,7 @@ def run() -> int:
     ctx.setContextProperty("connectionsModel", model)
     ctx.setContextProperty("remoteProbes", probes)
     ctx.setContextProperty("syncRunner", runner)
+    ctx.setContextProperty("themeBridge", theme)
     engine.load(Path(__file__).parent / "qml" / "Main.qml")
     if not engine.rootObjects():
         return 1

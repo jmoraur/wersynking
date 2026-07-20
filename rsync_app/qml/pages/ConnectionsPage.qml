@@ -136,9 +136,16 @@ Item {
                     Layout.fillWidth: true
                     spacing: Theme.s3
 
+                    Wordmark {
+                        Layout.rightMargin: Theme.s3
+                    }
+
                     Button {
                         text: "New connection"
                         icon.name: "list-add"
+                        // Recolor: theme icons come from the session's icon
+                        // theme, which may not match a forced light/dark mode.
+                        icon.color: Theme.textColor
                         highlighted: true
                         onClicked: page.newConnection(-1)
                     }
@@ -157,6 +164,33 @@ Item {
                         ]
                         value: connectionsModel.viewMode
                         onActivated: v => connectionsModel.viewMode = v
+                    }
+
+                    ToolButton {
+                        icon.name: "contrast"
+                        icon.color: Theme.textColor
+                        onClicked: themeMenu.open()
+
+                        Menu {
+                            id: themeMenu
+                            objectName: "themeMenu"
+                            y: parent.height
+
+                            Repeater {
+                                model: [
+                                    {value: "system", label: "System"},
+                                    {value: "light", label: "Light"},
+                                    {value: "dark", label: "Dark"},
+                                ]
+                                MenuItem {
+                                    required property var modelData
+                                    text: modelData.label
+                                    checkable: true
+                                    checked: themeBridge.mode === modelData.value
+                                    onTriggered: themeBridge.setMode(modelData.value)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -211,6 +245,7 @@ Item {
                         Layout.bottomMargin: Theme.s4
                         text: "Create your first connection"
                         icon.name: "list-add"
+                        icon.color: Theme.textColor
                         onClicked: page.newConnection(-1)
                     }
                 }

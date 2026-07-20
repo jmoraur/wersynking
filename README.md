@@ -1,4 +1,4 @@
-# We RSynk-ing
+# WeRSynking
 
 A KDE desktop app that replaces hand-typed `rsync` invocations with a managed
 library of connections. Define *source folder → destination device* pairs once,
@@ -32,13 +32,13 @@ command it is about to execute.
 ## Install (Fedora)
 
 Download the latest `.rpm` from
-[Releases](https://github.com/jmoraur/we-rsynk-ing/releases), then:
+[Releases](https://github.com/jmoraur/wersynking/releases), then:
 
 ```bash
-sudo dnf install ./we-rsynk-ing-*.noarch.rpm
+sudo dnf install ./wersynking-*.noarch.rpm
 ```
 
-Launch **We RSynk-ing** from the app menu / KRunner, or run `we-rsynk-ing`
+Launch **WeRSynking** from the app menu / KRunner, or run `wersynking`
 in a terminal.
 
 Dependencies (pulled in automatically): `python3-pyside6`, `rsync`.
@@ -46,8 +46,8 @@ Dependencies (pulled in automatically): `python3-pyside6`, `rsync`.
 ## Run from source
 
 ```bash
-git clone https://github.com/jmoraur/we-rsynk-ing.git
-cd we-rsynk-ing
+git clone https://github.com/jmoraur/wersynking.git
+cd wersynking
 sudo dnf install python3-pyside6 rsync
 python -m rsync_app
 ```

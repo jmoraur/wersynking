@@ -20,6 +20,9 @@ QtObject {
     readonly property color accent: pal.highlight
     readonly property color onAccent: pal.highlightedText
 
+    // Brand red — the "RSynk" part of the wordmark.
+    readonly property color brand: dark ? "#f85149" : "#cf222e"
+
     // Status hues — chosen to read on both light and dark surfaces.
     readonly property color ok: dark ? "#3fb950" : "#1a7f37"
     readonly property color warn: dark ? "#d29922" : "#9a6700"

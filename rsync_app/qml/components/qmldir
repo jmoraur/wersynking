@@ -10,4 +10,5 @@ CommandPreview 1.0 CommandPreview.qml
 IssueList 1.0 IssueList.qml
 ScrollComboBox 1.0 ScrollComboBox.qml
 TreeRow 1.0 TreeRow.qml
+Wordmark 1.0 Wordmark.qml
 OutputPanel 1.0 OutputPanel.qml

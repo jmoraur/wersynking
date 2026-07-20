@@ -25,6 +25,7 @@ from rsync_app.models import ConnectionsModel
 from rsync_app.mounts import MountWatcher
 from rsync_app.probes import RemoteProbeWatcher
 from rsync_app.runner import SyncRunner
+from rsync_app.theme import ThemeBridge
 
 
 def _find_output_panel(win) -> QObject:
@@ -69,6 +70,8 @@ def main() -> int:
     ctx.setContextProperty("connectionsModel", model)
     ctx.setContextProperty("remoteProbes", probes)
     ctx.setContextProperty("syncRunner", runner)
+    theme = ThemeBridge()
+    ctx.setContextProperty("themeBridge", theme)
     engine.load(Path("rsync_app/qml/Main.qml").resolve())
     if not engine.rootObjects():
         print("ERROR: engine failed to load Main.qml", file=sys.stderr)
