@@ -1,6 +1,6 @@
 Name:           wersynking
-Version:        0.3.0
-Release:        2%{?dist}
+Version:        0.3.1
+Release:        1%{?dist}
 Summary:        Managed rsync connections with a PySide6/QML UI
 
 # Renamed from we-rsynk-ing at 0.2.0; let dnf swap the old package.
@@ -64,6 +64,11 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/wersynking.desktop
 %{_datadir}/icons/hicolor/scalable/apps/rsync-app.svg
 
 %changelog
+* Tue Jul 21 2026 Jan Moraru <jan@moraru.ch> - 0.3.1-1
+- Fix the light/dark/system theme switch doing nothing under system Qt:
+  the KDE platform theme ignores color-scheme requests, so the app now
+  sets its palette itself and cascades it to all controls
+
 * Mon Jul 20 2026 Jan Moraru <jan@moraru.ch> - 0.3.0-2
 - Disable Qt's QML disk cache at startup: rpm-normalized mtimes made
   same-day releases serve the previous version's cached UI

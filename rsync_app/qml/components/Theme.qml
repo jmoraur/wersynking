@@ -9,6 +9,9 @@ QtObject {
     readonly property SystemPalette pal: SystemPalette {
         colorGroup: SystemPalette.Active
     }
+    readonly property SystemPalette palDisabled: SystemPalette {
+        colorGroup: SystemPalette.Disabled
+    }
 
     readonly property bool dark: pal.window.hslLightness < 0.5
 
