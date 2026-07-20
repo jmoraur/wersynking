@@ -7,7 +7,7 @@ import "../components"
 // Source-label dialog. Two fields: a group label (e.g. "Laptop") and the
 // absolute laptop path it points to. The source is shown as
 // "<group> > <folder>", where the folder is the path's last segment — so
-// one group repeats across folders (Laptop > Videos, Laptop > Music).
+// one group repeats across folders (Laptop > Pictures, Laptop > Documents).
 //
 // Modes: sourceLabelId === -1 → add, else → edit.
 // Emits acceptedWithId(int newId) so callers (e.g. ConnectionForm's
