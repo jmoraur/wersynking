@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "we-rsynk-ing"
+version = "0.1.0"
+description = "We RSynk-ing — managed rsync connections with a PySide6/QML UI"
+readme = "README.md"
+license = "PolyForm-Noncommercial-1.0.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = ["PySide6>=6.6"]
+
+[project.urls]
+Homepage = "https://github.com/jmoraur/we-rsynk-ing"
+
+[project.scripts]
+we-rsynk-ing = "rsync_app.app:run"
+
+[tool.setuptools]
+packages = ["rsync_app"]
+
+[tool.setuptools.package-data]
+rsync_app = [
+    "qml/*.qml",
+    "qml/**/*.qml",
+    "qml/**/qmldir",
+    "icons/*.svg",
+]

@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.db
+*.db-journal
+.ruff_cache/
+.qmlcache/
+.venv/
+
+# local-only development files, not part of the public repo
+.claude/
+CLAUDE.md
+tasks/
+packaging/icons/candidates/
+.git-archived/

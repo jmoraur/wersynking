@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=We RSynk-ing
+Comment=Managed rsync connections
+Exec=we-rsynk-ing
+TryExec=we-rsynk-ing
+Icon=rsync-app
+Categories=Utility;FileTools;Qt;
+Terminal=false
+StartupNotify=true
