@@ -1,5 +1,5 @@
 Name:           wersynking
-Version:        0.2.0
+Version:        0.3.0
 Release:        1%{?dist}
 Summary:        Managed rsync connections with a PySide6/QML UI
 
@@ -64,6 +64,16 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/wersynking.desktop
 %{_datadir}/icons/hicolor/scalable/apps/rsync-app.svg
 
 %changelog
+* Mon Jul 20 2026 Jan Moraru <jan@moraru.ch> - 0.3.0-1
+- Plain-language ownership & permissions (Like in source / Like in
+  destination / Custom with owner, group and permission fields); fixes
+  the self-cancelling force-dest-values rsync flags
+- SSH reach settings (--rsh) move to the device; reachability probe
+  honors a custom port
+- Skip list with preset chips and an add-folder picker
+- Connection form: pinned command preview, live validation messages in
+  plain language, resolved destination path under the subpath field
+
 * Mon Jul 20 2026 Jan Moraru <jan@moraru.ch> - 0.2.0-1
 - Rename package we-rsynk-ing -> wersynking (app is now "WeRSynking")
 - In-app two-color wordmark
