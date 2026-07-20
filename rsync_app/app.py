@@ -1,5 +1,15 @@
+import os
 import sys
 from pathlib import Path
+
+# Qt's on-disk QML cache is keyed by source path + mtime, and rpmbuild
+# normalizes installed-file mtimes to the spec's newest changelog date —
+# so two same-day releases collide and the cache serves the PREVIOUS
+# version's UI on top of the new backend (bit us on v0.1.0→v0.2.0 and
+# again on v0.2.0→v0.3.0; see tasks/lessons.md "Packaging / Qt runtime").
+# The app is a dozen small QML files; recompiling at launch costs a few
+# tens of ms. Must be set before any QtQml import creates an engine.
+os.environ.setdefault("QML_DISABLE_DISK_CACHE", "1")
 
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle

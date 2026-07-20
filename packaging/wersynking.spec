@@ -1,6 +1,6 @@
 Name:           wersynking
 Version:        0.3.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Managed rsync connections with a PySide6/QML UI
 
 # Renamed from we-rsynk-ing at 0.2.0; let dnf swap the old package.
@@ -64,6 +64,10 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/wersynking.desktop
 %{_datadir}/icons/hicolor/scalable/apps/rsync-app.svg
 
 %changelog
+* Mon Jul 20 2026 Jan Moraru <jan@moraru.ch> - 0.3.0-2
+- Disable Qt's QML disk cache at startup: rpm-normalized mtimes made
+  same-day releases serve the previous version's cached UI
+
 * Mon Jul 20 2026 Jan Moraru <jan@moraru.ch> - 0.3.0-1
 - Plain-language ownership & permissions (Like in source / Like in
   destination / Custom with owner, group and permission fields); fixes
