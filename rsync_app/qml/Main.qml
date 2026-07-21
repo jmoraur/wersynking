@@ -10,7 +10,7 @@ ApplicationWindow {
     width: 1100
     height: 720
     visible: true
-    title: "WeRSynking"
+    title: "WeRsyncing"
 
     // Qt Quick Controls resolve their colors from the platform theme, which
     // (on KDE) ignores the application palette ThemeBridge sets — so the

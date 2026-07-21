@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=WeRSynking
+Name=WeRsyncing
 Comment=Managed rsync connections
-Exec=wersynking
-TryExec=wersynking
+Exec=wersyncing
+TryExec=wersyncing
 Icon=rsync-app
 Categories=Utility;FileTools;Qt;
 Terminal=false

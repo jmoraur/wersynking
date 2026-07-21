@@ -36,7 +36,7 @@ def run() -> int:
     # Wayland app_id → desktop-file association (icon + window grouping).
     # Distinct from the QSettings names above, which stay "RsyncApp" so the
     # existing config/DB paths keep working.
-    app.setDesktopFileName("wersynking")
+    app.setDesktopFileName("wersyncing")
     QQuickStyle.setStyle("Fusion")
     theme = ThemeBridge()
 

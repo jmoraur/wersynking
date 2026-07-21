@@ -50,7 +50,7 @@ class TrayController(QObject):
 
         icon = _resolve_icon()
         self._tray = QSystemTrayIcon(icon, self)
-        self._tray.setToolTip("WeRSynking — idle")
+        self._tray.setToolTip("WeRsyncing — idle")
 
         menu = QMenu()
         act_show = QAction("Show window", menu)
@@ -115,7 +115,7 @@ class TrayController(QObject):
             elif state == "failed":
                 failed += 1
         if not (running or queued or done or failed):
-            self._tray.setToolTip("WeRSynking — idle")
+            self._tray.setToolTip("WeRsyncing — idle")
             return
         parts = []
         if running:
@@ -126,7 +126,7 @@ class TrayController(QObject):
             parts.append(f"{done} done")
         if failed:
             parts.append(f"{failed} failed")
-        self._tray.setToolTip("WeRSynking — " + " · ".join(parts))
+        self._tray.setToolTip("WeRsyncing — " + " · ".join(parts))
 
     def _on_state_changed(self, job_id: int, state: str) -> None:
         if self._tray is None:

@@ -47,7 +47,7 @@ class SuspendInhibitor(QObject):
                 [
                     "systemd-inhibit",
                     "--what=sleep",
-                    "--who=WeRSynking",
+                    "--who=WeRsyncing",
                     "--why=Sync in progress",
                     "--mode=block",
                     "sleep", "infinity",

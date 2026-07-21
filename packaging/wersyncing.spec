@@ -1,16 +1,19 @@
-Name:           wersynking
-Version:        0.3.1
+Name:           wersyncing
+Version:        0.4.0
 Release:        1%{?dist}
 Summary:        Managed rsync connections with a PySide6/QML UI
 
-# Renamed from we-rsynk-ing at 0.2.0; let dnf swap the old package.
+# Renamed we-rsynk-ing -> wersynking (0.2.0) -> wersyncing (0.4.0);
+# let dnf swap the old packages.
 Obsoletes:      we-rsynk-ing <= 0.1.0
 Provides:       we-rsynk-ing = %{version}-%{release}
+Obsoletes:      wersynking <= 0.3.1
+Provides:       wersynking = %{version}-%{release}
 
 # PolyForm Noncommercial is a valid SPDX id but NOT a Fedora-allowed license;
 # this package is distributed via GitHub Releases only, never Fedora/COPR.
 License:        PolyForm-Noncommercial-1.0.0
-URL:            https://github.com/jmoraur/wersynking
+URL:            https://github.com/jmoraur/wersyncing
 Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
@@ -25,7 +28,7 @@ Requires:       python3-pyside6
 Recommends:     systemd
 
 %description
-WeRSynking is a desktop app for managing recurring rsync jobs between
+WeRsyncing is a desktop app for managing recurring rsync jobs between
 local folders, removable drives and SSH remotes, with live device
 detection, a system tray indicator and desktop notifications.
 
@@ -48,22 +51,26 @@ use only).
 %pyproject_install
 %pyproject_save_files -l rsync_app
 
-install -Dpm0644 packaging/wersynking.desktop \
-    %{buildroot}%{_datadir}/applications/wersynking.desktop
+install -Dpm0644 packaging/wersyncing.desktop \
+    %{buildroot}%{_datadir}/applications/wersyncing.desktop
 install -Dpm0644 packaging/icons/rsync-app.svg \
     %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/rsync-app.svg
 
 %check
-desktop-file-validate %{buildroot}%{_datadir}/applications/wersynking.desktop
+desktop-file-validate %{buildroot}%{_datadir}/applications/wersyncing.desktop
 
 %files -f %{pyproject_files}
 %license LICENSE
 %doc README.md
-%{_bindir}/wersynking
-%{_datadir}/applications/wersynking.desktop
+%{_bindir}/wersyncing
+%{_datadir}/applications/wersyncing.desktop
 %{_datadir}/icons/hicolor/scalable/apps/rsync-app.svg
 
 %changelog
+* Tue Jul 21 2026 Jan Moraru <jan@moraru.ch> - 0.4.0-1
+- Rename package wersynking -> wersyncing (app is now "WeRsyncing");
+  command, desktop entry and two-color wordmark updated to match
+
 * Tue Jul 21 2026 Jan Moraru <jan@moraru.ch> - 0.3.1-1
 - Fix the light/dark/system theme switch doing nothing under system Qt:
   the KDE platform theme ignores color-scheme requests, so the app now
